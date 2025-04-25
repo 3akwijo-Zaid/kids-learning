@@ -30,12 +30,13 @@ CREATE TABLE IF NOT EXISTS elements (
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
 
--- Create media_elements table
+-- Create media_elements table with status column
 CREATE TABLE IF NOT EXISTS media_elements (
     id INT AUTO_INCREMENT PRIMARY KEY,
     element_id INT NOT NULL,
     file_path VARCHAR(255) NOT NULL,
     media_type ENUM('image', 'audio', 'video') NOT NULL,
+    status ENUM('active', 'deleted', 'permanently_deleted') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (element_id) REFERENCES elements(id) ON DELETE CASCADE
 );

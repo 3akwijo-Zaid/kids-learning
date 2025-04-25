@@ -12,27 +12,11 @@ if (isset($_SESSION['message'])) {
     unset($_SESSION['alert_class']);
 }
 
-// Replace the existing checkExistingMediaType function at the top of the file
-function checkExistingMediaType($conn, $element_id, $media_type) {
-    // Check both the media_elements table and the elements table
-    $stmt = $conn->prepare("
-        SELECT 
-            (SELECT COUNT(*) FROM media_elements WHERE element_id = ? AND media_type = ?) as media_count,
-            CASE 
-                WHEN ? = 'image' THEN image_path
-                WHEN ? = 'audio' THEN audio_path
-                WHEN ? = 'video' THEN video_path
-            END as existing_path
-        FROM elements 
-        WHERE id = ?
-    ");
-    
-    $stmt->bind_param("issssi", $element_id, $media_type, $media_type, $media_type, $media_type, $element_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    
-    return ($row['media_count'] > 0 || !empty($row['existing_path']));
+// Update the updateMediaStatus function to use media_elements table
+function updateMediaStatus($conn, $file_path, $status) {
+    $stmt = $conn->prepare("UPDATE media_elements SET status = ? WHERE file_path = ?");
+    $stmt->bind_param("ss", $status, $file_path);
+    return $stmt->execute();
 }
 
 // Check if logged in
@@ -43,7 +27,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 
 $conn = getDBConnection();
 
-// Replace the existing file upload handling section with this updated version
+// Modify the file upload handling section
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['media_file'])) {
     $element_id = $_POST['element_id'] ?? 0;
     $type = $_POST['type'] ?? '';
@@ -51,7 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['media_file'])) {
     
     if ($file['error'] === UPLOAD_ERR_OK && !empty($element_id) && !empty($type)) {
         // Check for existing media type
-        if (checkExistingMediaType($conn, $element_id, $type)) {
+        $stmt = $conn->prepare("SELECT file_path, status FROM media_elements WHERE element_id = ? AND media_type = ?");
+        $stmt->bind_param("is", $element_id, $type);
+        $stmt->execute();
+        $existing_media = $stmt->get_result()->fetch_assoc();
+
+        if ($existing_media && $existing_media['status'] !== 'deleted') {
             $message = "Error: This element already has a {$type} file associated with it. Please delete the existing one first.";
         } else {
             // Get element and category info
@@ -73,13 +62,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['media_file'])) {
                 $target_path = $upload_dir . $filename;
                 
                 if (move_uploaded_file($file['tmp_name'], $target_path)) {
-                    // Start transaction
                     $conn->begin_transaction();
                     try {
-                        // Insert into media_elements table
                         $relative_path = "uploads/{$element['category_name']}/$filename";
-                        $stmt = $conn->prepare("INSERT INTO media_elements (element_id, file_path, media_type) VALUES (?, ?, ?)");
-                        $stmt->bind_param("iss", $element_id, $relative_path, $type);
+                        
+                        if ($existing_media) {
+                            // Update existing record
+                            $stmt = $conn->prepare("UPDATE media_elements SET file_path = ?, status = 'active' WHERE element_id = ? AND media_type = ?");
+                            $stmt->bind_param("sis", $relative_path, $element_id, $type);
+                        } else {
+                            // Insert new record
+                            $stmt = $conn->prepare("INSERT INTO media_elements (element_id, file_path, media_type, status) VALUES (?, ?, ?, 'active')");
+                            $stmt->bind_param("iss", $element_id, $relative_path, $type);
+                        }
                         
                         if (!$stmt->execute()) {
                             throw new Exception('Error recording media association.');
@@ -116,18 +111,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['media_file'])) {
     }
 }
 
-// Update the media deletion handling section:
-
-// Handle media deletion
+// Modify the media deletion handling section
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete') {
     $file_path = $_POST['file'] ?? '';
     if (!empty($file_path)) {
-        $full_path = "../" . $file_path;
-        
-        // Start transaction
         $conn->begin_transaction();
         try {
-            // Get the media details from database
+            // Update the media status to deleted
+            $stmt = $conn->prepare("UPDATE media_elements SET status = 'deleted' WHERE file_path = ?");
+            $stmt->bind_param("s", $file_path);
+            if (!$stmt->execute()) {
+                throw new Exception('Failed to update media status');
+            }
+
+            // Get the media details
             $stmt = $conn->prepare("SELECT element_id, media_type FROM media_elements WHERE file_path = ?");
             $stmt->bind_param("s", $file_path);
             $stmt->execute();
@@ -142,125 +139,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     throw new Exception('Failed to update element');
                 }
 
-                // Delete from media_elements table
-                $stmt = $conn->prepare("DELETE FROM media_elements WHERE file_path = ?");
-                $stmt->bind_param("s", $file_path);
-                if (!$stmt->execute()) {
-                    throw new Exception('Failed to delete media record');
+                // Delete the physical file
+                $full_path = "../" . $file_path;
+                if (file_exists($full_path)) {
+                    if (!unlink($full_path)) {
+                        throw new Exception('Failed to delete physical file');
+                    }
                 }
-            }
-
-            // Delete the physical file
-            if (file_exists($full_path) && !unlink($full_path)) {
-                throw new Exception('Failed to delete file');
             }
 
             $conn->commit();
             $_SESSION['message'] = "File deleted successfully!";
             $_SESSION['alert_class'] = "alert-success";
-            header('Location: ' . $_SERVER['PHP_SELF']);
-            exit();
-        } catch (Exception $e) {
-            $conn->rollback();
-            $_SESSION['message'] = "Error: " . $e->getMessage();
-            $_SESSION['alert_class'] = "alert-danger";
-            header('Location: ' . $_SERVER['PHP_SELF']);
-            exit();
-        }
-    }
-}
-
-// Add this after your existing POST handlers
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit') {
-    $original_path = $_POST['original_path'] ?? '';
-    $new_element_id = $_POST['new_element_id'] ?? '';
-    
-    if (!empty($original_path) && !empty($new_element_id)) {
-        $conn->begin_transaction();
-        try {
-            // Get new element info
-            $stmt = $conn->prepare("
-                SELECT e.id, e.name, c.name as category_name 
-                FROM elements e 
-                JOIN categories c ON e.category_id = c.id 
-                WHERE e.id = ?
-            ");
-            $stmt->bind_param("i", $new_element_id);
-            $stmt->execute();
-            $new_element = $stmt->get_result()->fetch_assoc();
-            
-            if ($new_element) {
-                // Get current media info
-                $stmt = $conn->prepare("SELECT media_type FROM media_elements WHERE file_path = ?");
-                $stmt->bind_param("s", $original_path);
-                $stmt->execute();
-                $media_info = $stmt->get_result()->fetch_assoc();
-                
-                if ($media_info) {
-                    $file_name = basename($original_path);
-                    $new_path = "uploads/{$new_element['category_name']}/$file_name";
-                    
-                    // Move file if needed
-                    if ($original_path !== $new_path) {
-                        $old_full_path = "../" . $original_path;
-                        $new_full_path = "../" . $new_path;
-                        
-                        if (!file_exists(dirname($new_full_path))) {
-                            mkdir(dirname($new_full_path), 0777, true);
-                        }
-                        
-                        if (!rename($old_full_path, $new_full_path)) {
-                            throw new Exception('Failed to move file');
-                        }
-                    }
-                    
-                    // Update database records
-                    $stmt = $conn->prepare("
-                        UPDATE media_elements 
-                        SET element_id = ?, file_path = ? 
-                        WHERE file_path = ?
-                    ");
-                    $stmt->bind_param("iss", $new_element_id, $new_path, $original_path);
-                    if (!$stmt->execute()) {
-                        throw new Exception('Failed to update media record');
-                    }
-                    
-                    // Update element path
-                    $field = $media_info['media_type'] . '_path';
-                    $stmt = $conn->prepare("UPDATE elements SET $field = ? WHERE id = ?");
-                    $stmt->bind_param("si", $new_path, $new_element_id);
-                    if (!$stmt->execute()) {
-                        throw new Exception('Failed to update element record');
-                    }
-                    
-                    $conn->commit();
-                    $_SESSION['message'] = "Media updated successfully!";
-                    $_SESSION['alert_class'] = "alert-success";
-                } else {
-                    throw new Exception('Media record not found');
-                }
-            } else {
-                throw new Exception('Element not found');
-            }
         } catch (Exception $e) {
             $conn->rollback();
             $_SESSION['message'] = "Error: " . $e->getMessage();
             $_SESSION['alert_class'] = "alert-danger";
         }
-        
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit();
     }
 }
 
-// Modify the media files query section
-// Replace the existing media files array population with this:
-
+// Update the query to fetch media files
 $media_files = [];
-$query = "SELECT m.file_path, m.media_type, e.name as element_name, c.name as category_name
+$query = "SELECT m.file_path, m.media_type, m.status, e.name as element_name, c.name as category_name
           FROM media_elements m
           JOIN elements e ON m.element_id = e.id
           JOIN categories c ON e.category_id = c.id
+          WHERE m.status = 'active'
           ORDER BY c.name, e.name";
 
 $result = $conn->query($query);
