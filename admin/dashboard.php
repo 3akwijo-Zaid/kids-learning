@@ -129,8 +129,62 @@ $elements = $conn->query("SELECT COUNT(*) as count FROM elements")->fetch_assoc(
                 </div>
             </div>
         </div>
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Upload Directory Sync</h5>
+                        <p class="card-text">Synchronize files from upload directory with database.</p>
+                        <button id="syncButton" class="btn btn-primary">
+                            <i class="bi bi-arrow-repeat"></i> Sync Now
+                        </button>
+                        <div id="syncMessages" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('syncButton').addEventListener('click', function() {
+            const button = this;
+            const messagesDiv = document.getElementById('syncMessages');
+            
+            button.disabled = true;
+            button.innerHTML = '<i class="bi bi-arrow-repeat"></i> Syncing...';
+            messagesDiv.innerHTML = '<div class="d-flex justify-content-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+            fetch('../watch_uploads.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'sync=1'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.messages.length === 0) {
+                    messagesDiv.innerHTML = '<div class="alert alert-info">No changes detected.</div>';
+                } else {
+                    let html = '<div class="alert alert-success">';
+                    html += '<h6 class="alert-heading">Sync Results:</h6><ul class="mb-0">';
+                    data.messages.forEach(message => {
+                        html += `<li>${message}</li>`;
+                    });
+                    html += '</ul></div>';
+                    messagesDiv.innerHTML = html;
+                }
+            })
+            .catch(error => {
+                messagesDiv.innerHTML = '<div class="alert alert-danger">Error during sync. Please try again.</div>';
+                console.error('Sync error:', error);
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sync Now';
+            });
+        });
+    </script>
 </body>
-</html> 
+</html>
