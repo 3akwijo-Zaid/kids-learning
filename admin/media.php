@@ -388,6 +388,7 @@ $categories = $conn->query("SELECT * FROM categories ORDER BY name");
                         <div class="mb-3">
                             <label for="edit_category_id" class="form-label">Category</label>
                             <select class="form-select" id="edit_category_id" name="new_category_id" required>
+                                <option value="">Choose a category</option>
                                 <?php 
                                 $categories->data_seek(0);
                                 while ($category = $categories->fetch_assoc()): 
