@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS elements (
     audio_path VARCHAR(255),
     video_path VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_element (category_id, name)
 );
 
 -- Create media_elements table with status column

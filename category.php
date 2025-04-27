@@ -78,6 +78,13 @@ $elements = $stmt->get_result();
             object-fit: cover;
             width: 100%;
         }
+        .modal-img {
+            max-width: 100%;
+            height: auto;
+        }
+        .element-image {
+            cursor: pointer;
+        }
         .alphabet-icon {
             height: 200px;
             display: flex;
@@ -116,7 +123,8 @@ $elements = $stmt->get_result();
                         <?php if (!empty($element['image_path'])): ?>
                             <img src="<?php echo htmlspecialchars($element['image_path']); ?>" 
                                  class="card-img-top element-image" 
-                                 alt="<?php echo htmlspecialchars($element['name']); ?>">
+                                 alt="<?php echo htmlspecialchars($element['name']); ?>"
+                                 title="Click to view full size">
                         <?php else: ?>
                             <div class="alphabet-icon">
                                 <?php echo htmlspecialchars($element['name']); ?>
@@ -156,6 +164,36 @@ $elements = $stmt->get_result();
         </div>
     </footer>
 
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="" class="modal-img" alt="">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
+        const modalImage = document.querySelector('#imageModal .modal-img');
+        const modalTitle = document.querySelector('#imageModal .modal-title');
+
+        document.querySelectorAll('.element-image').forEach(img => {
+            img.addEventListener('click', function() {
+                modalImage.src = this.src;
+                modalTitle.textContent = this.alt;
+                imageModal.show();
+            });
+        });
+    });
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-</html> 
+</html>

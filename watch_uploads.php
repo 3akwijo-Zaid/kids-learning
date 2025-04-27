@@ -114,11 +114,18 @@ class MediaSync {
 
     private function createElement($category_id, $filename) {
         $element_name = pathinfo($filename, PATHINFO_FILENAME);
-        $stmt = $this->conn->prepare("
-            INSERT INTO elements (category_id, name) 
-            VALUES (?, ?) 
-            ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
-        ");
+
+        // Check if element already exists
+        $stmt = $this->conn->prepare("SELECT id FROM elements WHERE category_id = ? AND name = ?");
+        $stmt->bind_param("is", $category_id, $element_name);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($row = $result->fetch_assoc()) {
+            return $row['id'];
+        }
+
+        // Insert new element if not exists
+        $stmt = $this->conn->prepare("INSERT INTO elements (category_id, name) VALUES (?, ?)");
         $stmt->bind_param("is", $category_id, $element_name);
         $stmt->execute();
         return $stmt->insert_id;
