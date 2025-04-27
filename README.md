@@ -87,26 +87,9 @@ kids-learning/
 2. Click on a category to view its elements
 3. Interact with learning materials (images, audio, video)
 
-## Security
-
-- All passwords are hashed using PHP's `password_hash()`
-- SQL injection prevention using prepared statements
-- Input validation and sanitization
-- Session-based authentication
-- Secure file upload handling
-
 ## Requirements
-
 - PHP 7.4 or higher
 - MySQL 5.7 or higher
-- Web server (Apache/Nginx)
+- Apache
 - File upload permissions
 - GD library for image processing
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
