@@ -26,10 +26,7 @@ An interactive educational platform for children aged 3-8, featuring various lea
 2. **File Setup**
    - Upload all files to your web server
    - Ensure the `uploads` directory is writable
-   - Run the setup script to create directories and download media:
-     ```bash
-     php setup.php
-     ```
+     
 
 3. **Configuration**
    - Update database credentials in `config/database.php` if needed
@@ -41,19 +38,40 @@ An interactive educational platform for children aged 3-8, featuring various lea
 
 ```
 kids-learning/
-├── admin/              # Admin panel files
-├── config/             # Configuration files
-├── database/           # Database schema and initial data
-├── uploads/            # Media files
-│   ├── animals/        # Animal images and sounds
-│   ├── alphabets/      # Alphabet images and sounds
-│   ├── transport/      # Transport images and sounds
-│   ├── fruits/         # Fruit images and sounds
-│   ├── colors/         # Color images and sounds
-│   └── shapes/         # Shape images and sounds
-├── index.php           # Main landing page
-├── category.php        # Category view page
-└── setup.php           # Setup script
+├── admin/                        # Admin panel for managing content
+│   ├── categories.php            # Manage categories (add/edit/delete)
+│   ├── category.php              # Add/edit a single category
+│   ├── dashboard.php             # Admin dashboard with stats and quick links
+│   ├── elements.php              # Manage learning elements (add/edit/delete)
+│   ├── get_elements.php          # AJAX endpoint to fetch elements by category
+│   ├── index.php                 # Admin home page (lists categories)
+│   ├── login.php                 # Admin login page
+│   ├── logout.php                # Admin logout script
+│   ├── media.php                 # Media library (upload/edit/delete media)
+│   └── settings.php              # Admin settings (change password, system info)
+│
+── config/
+│   └── database.php              # Database connection settings and function
+│
+├── database/
+│   ├── initial_data.sql          # SQL file with initial data for categories/elements
+│   └── schema.sql                # SQL file with database schema
+├── uploads/                      # Media files
+│   ├── animals/                  # Animal images and sounds
+│   ├── alphabets/                # Alphabet images and sounds
+│   ├── transport/                # Transport images and sounds
+│   ├── fruits/                   # Fruit images and sounds
+│   ├── colors/                   # Color images and sounds
+│   └── shapes/                   # Shape images and sounds
+├── index.php                     # Main landing page
+├── category.php                  # Category view page
+├── generate_audio.php            # Script to generate audio files for elements
+├── generate_images.php           # Script to generate placeholder images for elements
+├── index.php                     # Public home page
+├── optimize_images.php           # Script to optimize images in /uploads
+├── README.md                     # Project documentation and setup instructions
+├── setup.php                     # Script to set up directories and sync files with DB
+└── watch_uploads.php             # Script to sync /uploads directory with the database
 ```
 
 ## Usage
