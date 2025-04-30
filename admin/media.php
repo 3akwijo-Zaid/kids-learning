@@ -161,6 +161,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
+// Handle media edit (move to another element/category)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit') {
+    $original_path = $_POST['original_path'] ?? '';
+    $new_category_id = $_POST['new_category_id'] ?? '';
+    $new_element_id = $_POST['new_element_id'] ?? '';
+
+    if ($original_path && $new_category_id && $new_element_id) {
+        $conn->begin_transaction();
+        try {
+            // Get old media info (to know the type)
+            $stmt = $conn->prepare("SELECT id, element_id, media_type, file_path FROM media_elements WHERE file_path = ?");
+            $stmt->bind_param("s", $original_path);
+            $stmt->execute();
+            $media = $stmt->get_result()->fetch_assoc();
+
+            if (!$media) {
+                throw new Exception('Media not found.');
+            }
+
+            // Check if the target element already has an active media of the same type (excluding this media)
+            $stmt = $conn->prepare("SELECT id FROM media_elements WHERE element_id = ? AND media_type = ? AND status = 'active' AND file_path != ?");
+            $stmt->bind_param("iss", $new_element_id, $media['media_type'], $original_path);
+            $stmt->execute();
+            $conflict = $stmt->get_result()->fetch_assoc();
+            if ($conflict) {
+                throw new Exception('This element already has an active media of the same type. Please remove it first.');
+            }
+
+            // Get new category and element info
+            $stmt = $conn->prepare("SELECT e.id, e.name, c.name as category_name FROM elements e JOIN categories c ON e.category_id = c.id WHERE e.id = ?");
+            $stmt->bind_param("i", $new_element_id);
+            $stmt->execute();
+            $new_element = $stmt->get_result()->fetch_assoc();
+
+            if (!$new_element) {
+                throw new Exception('New element not found.');
+            }
+
+            // If category changed, move file
+            $old_path = "../" . $media['file_path'];
+            $filename = basename($media['file_path']);
+            $new_dir = "../uploads/{$new_element['category_name']}/";
+            if (!file_exists($new_dir)) {
+                mkdir($new_dir, 0777, true);
+            }
+            $new_relative_path = "uploads/{$new_element['category_name']}/$filename";
+            $new_full_path = $new_dir . $filename;
+
+            if ($media['file_path'] !== $new_relative_path) {
+                if (!rename($old_path, $new_full_path)) {
+                    throw new Exception('Failed to move file.');
+                }
+            }
+
+            // Update media_elements
+            $stmt = $conn->prepare("UPDATE media_elements SET element_id = ?, file_path = ? WHERE id = ?");
+            $stmt->bind_param("isi", $new_element_id, $new_relative_path, $media['id']);
+            if (!$stmt->execute()) {
+                throw new Exception('Failed to update media association.');
+            }
+
+            // Remove old path from previous element
+            $field = $media['media_type'] . '_path';
+            $stmt = $conn->prepare("UPDATE elements SET $field = NULL WHERE id = ?");
+            $stmt->bind_param("i", $media['element_id']);
+            if (!$stmt->execute()) {
+                throw new Exception('Failed to update old element.');
+            }
+
+            // Set new path in new element
+            $stmt = $conn->prepare("UPDATE elements SET $field = ? WHERE id = ?");
+            $stmt->bind_param("si", $new_relative_path, $new_element_id);
+            if (!$stmt->execute()) {
+                throw new Exception('Failed to update new element.');
+            }
+
+            $conn->commit();
+            $_SESSION['message'] = "Media updated successfully!";
+            $_SESSION['alert_class'] = "alert-success";
+        } catch (Exception $e) {
+            $conn->rollback();
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['alert_class'] = "alert-danger";
+        }
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit();
+    }
+}
+
 // Update the query to fetch media files
 $media_files = [];
 $query = "SELECT m.file_path, m.media_type, m.status, e.name as element_name, c.name as category_name
